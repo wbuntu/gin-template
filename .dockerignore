@@ -1,11 +1,11 @@
 # binary
-gin-template
-
-# config file
-config.toml
+/e2e/e2e.test
 
 # build
-build/
+/build
+
+# docs
+/docs
 
 # report
-report/
+/report

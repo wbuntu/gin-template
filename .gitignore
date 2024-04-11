@@ -21,19 +21,16 @@
 .idea
 
 # Dependency directories (remove the comment below to include it)
-# /vendor
+/vendor
 
 # binary
 /e2e/e2e.test
-
-# config file
-config.toml
 
 # build
 /build
 
 # docs
-# /docs
+/docs
 
 # report
 /report
