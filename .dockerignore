@@ -1,0 +1,11 @@
+# binary
+gin-template
+
+# config file
+config.toml
+
+# build
+build/
+
+# report
+report/
