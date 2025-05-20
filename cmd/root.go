@@ -47,7 +47,7 @@ func initCmds() {
 }
 
 func initFlags() {
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "/etc/gin-template/config.toml", "toml config file")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", ".gin-template/config.toml", "toml config file")
 	rootCmd.PersistentFlags().Int("log-level", 4, "trace=6, debug=5, info=4, error=2, fatal=1, panic=0")
 }
 
@@ -68,7 +68,7 @@ func initConfig() {
 	// go-mysql-server -> :memory: -> gin-template:gin-template@tcp(127.0.0.1:6603)/db?charset=utf8mb4&parseTime=True&loc=Local
 	// mysql -> gin-template:gin-template@tcp(127.0.0.1:3306)/db?charset=utf8mb4&parseTime=True&loc=Local
 	viper.SetDefault("db.type", "sqlite")
-	viper.SetDefault("db.dsn", "/var/lib/gin-template/sqlite.db")
+	viper.SetDefault("db.dsn", ".gin-template/sqlite.db")
 	viper.SetDefault("db.min_idle_conns", 100)
 	viper.SetDefault("db.max_active_conns", 200)
 	viper.SetDefault("db.conn_lifetime", "1h0m0s")

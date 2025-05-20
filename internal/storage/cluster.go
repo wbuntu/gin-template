@@ -9,7 +9,6 @@ type Cluster struct {
 	Name        string        `gorm:"not null;comment:'名称'"`
 	Description string        `gorm:"comment:'集群描述信息'"`
 	ResourceID  string        `gorm:"not null;uniqueIndex;size:20;comment:'资源ID'"`
-	TenantID    string        `gorm:"not null;index;size:20;comment:'租户ID'"`
 	Type        K8sType       `gorm:"not null;comment:'k8s类型 k8s k3s'"`
 	Version     string        `gorm:"not null;comment:'版本'"`
 	Runtime     string        `gorm:"not null;comment:'运行时'"`
@@ -43,14 +42,14 @@ func ListRunnableClusterResoureID() ([]string, error) {
 }
 
 // ListCluster 分页列出集群
-func ListCluster(tenantID string, offset int, limit int, filter *Filter) ([]Cluster, error) {
+func ListCluster(offset int, limit int, filter *Filter) ([]Cluster, error) {
 	items := []Cluster{}
 	var err error
 	if filter != nil {
 		err = DB().
 			Limit(limit).
 			Offset(offset).
-			Where("tenant_id = ? and status != ?", tenantID, ClusterStatusDeleted).
+			Where("status != ?", ClusterStatusDeleted).
 			Where(filter.Query, filter.Args...).
 			Order("id desc").
 			Find(&items).Error
@@ -58,7 +57,7 @@ func ListCluster(tenantID string, offset int, limit int, filter *Filter) ([]Clus
 		err = DB().
 			Limit(limit).
 			Offset(offset).
-			Where("tenant_id = ? and status != ?", tenantID, ClusterStatusDeleted).
+			Where("status != ?", ClusterStatusDeleted).
 			Order("id desc").
 			Find(&items).Error
 	}
@@ -68,20 +67,20 @@ func ListCluster(tenantID string, offset int, limit int, filter *Filter) ([]Clus
 	return items, nil
 }
 
-// CountCluster 计算租户集群总数
-func CountCluster(tenantID string, filter *Filter) (int, error) {
+// CountCluster 计算集群总数
+func CountCluster(filter *Filter) (int, error) {
 	var count int64
 	var err error
 	if filter != nil {
 		err = DB().
 			Model(&Cluster{}).
-			Where("tenant_id = ? and status != ?", tenantID, ClusterStatusDeleted).
+			Where("status != ?", ClusterStatusDeleted).
 			Where(filter.Query, filter.Args...).
 			Count(&count).Error
 	} else {
 		err = DB().
 			Model(&Cluster{}).
-			Where("tenant_id = ? and status != ?", tenantID, ClusterStatusDeleted).
+			Where("status != ?", ClusterStatusDeleted).
 			Count(&count).Error
 	}
 	if err != nil {

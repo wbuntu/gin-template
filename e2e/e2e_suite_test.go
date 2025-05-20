@@ -3,7 +3,7 @@ package e2e
 import (
 	"testing"
 
-	"gitbub.com/wbuntu/gin-template/internal/pkg/tools"
+	"gitbub.com/wbuntu/gin-template/internal/pkg/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -14,14 +14,13 @@ func TestE2e(t *testing.T) {
 }
 
 var (
-	tenantID = "1234567890"
-	baseURL  = "http://127.0.0.1:8080"
+	baseURL = "http://127.0.0.1:8080"
 )
 
-var httpClient *tools.HTTPClient
+var httpClient *utils.HTTPClient
 
 var _ = BeforeSuite(func() {
-	httpClient = tools.NewHTTPClient(baseURL, map[string]string{"X-Tenant-ID": tenantID})
+	httpClient = utils.NewHTTPClient(baseURL)
 })
 
 var _ = AfterSuite(func() {

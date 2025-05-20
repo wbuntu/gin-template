@@ -1,6 +1,6 @@
 module gitbub.com/wbuntu/gin-template
 
-go 1.20
+go 1.23
 
 require (
 	github.com/gin-contrib/gzip v0.0.6

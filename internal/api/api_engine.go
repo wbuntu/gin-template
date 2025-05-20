@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"reflect"
 
-	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -20,10 +18,10 @@ import (
 
 func (s *Server) setupEngine(ctx context.Context, c *config.Config) error {
 	// 设置模式
-	gin.SetMode(gin.ReleaseMode)
+	gin.SetMode(gin.DebugMode)
 	// 初始化
 	g := gin.New()
-	// 启动Context特性
+	// 启动 Context 回落，g 的 request context 不为空时，相关请求回落到这个 context
 	g.ContextWithFallback = true
 	// 配置中间件
 	g.Use(
@@ -71,7 +69,7 @@ func addControllerRoute(g *gin.Engine) {
 	v1.Use(
 		middleware.HeaderExtracter(),
 		middleware.RequestLogger(),
-		gzip.Gzip(gzip.DefaultCompression),
+		middleware.Gzip(),
 	)
 	// 配置 routes
 	funcMap := map[string]func(string, ...gin.HandlerFunc) gin.IRoutes{
@@ -91,68 +89,52 @@ func addControllerRoute(g *gin.Engine) {
 		if !ok {
 			continue
 		}
-		v.Middleware = append(v.Middleware, handlerFuncWrapper(v.Ctrl))
+		v.Middleware = append(v.Middleware, handlerFuncWrapper(v.Factory))
 		fn(v.Path, v.Middleware...)
 	}
 }
 
-func getRoutes() []model.Route {
-	routes := []model.Route{}
-	routes = append(routes, clusterRoute...)
-	routes = append(routes, utilsRoute...)
-	return routes
-}
-
-func handlerFuncWrapper(ctrlTpl model.Controller) gin.HandlerFunc {
-	// 获取controller类型
-	ctrlType := reflect.TypeOf(ctrlTpl).Elem()
-	return func(c *gin.Context) {
+func handlerFuncWrapper(factory func() model.Controller) gin.HandlerFunc {
+	return func(g *gin.Context) {
 		// 根据类型创建实例
-		ctrlInstance := reflect.New(ctrlType).Interface().(model.Controller)
-		// 构造函数
+		ctrlInstance := factory()
+		// 初始化控制器
 		ctrlInstance.Init()
-		// 配置logger
-		logger := log.G(c)
-		ctrlInstance.SetLogger(logger)
-		// 初始化input
-		input := ctrlInstance.Input()
-		// 配置公共字段
-		input.SetTenantID(c.GetString(middleware.GinCtxTenantID))
-		input.SetRequestID(c.GetString(middleware.GinCtxRequestID))
-		input.SetFrom(c.GetString(middleware.GinCtxFrom))
-		// 初始化output
-		ctrlInstance.Output().Init()
-		// 设置requestID
-		ctrlInstance.Output().SetRequestID(input.GetRequestID())
-		// 跳过控制器逻辑、数据序列化和反序列化，由controller直接处理，例如Websocket、代理等
-		if ctrlInstance.SkipIO() {
-			ctrlInstance.Serve(c)
+		// 获取请求与响应的指针
+		request := ctrlInstance.GetRequest()
+		response := ctrlInstance.GetResponse()
+		// 设置请求 ID
+		requestID := g.GetString(middleware.GinCtxRequestID)
+		request.SetRequestID(requestID)
+		response.SetRequestID(requestID)
+		// 非 request/response 模式的请求
+		// 跳过自动化的 request 反序列化和 response 序列化，由 controller 直接处理请求，例如 Websocket、SSE、Proxy 等
+		if ctrlInstance.Codec().Streaming() {
+			ctrlInstance.Serve(g)
 			return
 		}
 		// 根据请求方法选择binding
-		var bindFn func(interface{}) error
-		// POST、PATCH、PUT：从Body中解析JSON
-		// 其他：从Query中解析FORM，参数值禁止嵌套，不允许使用数组、字典和结构体
-		switch c.Request.Method {
+		var bindFn func(any) error
+		// POST、PATCH、PUT：从 Body 中解析 request
+		// 其他：从 Query 中解析 request ，参数值禁止嵌套，不允许使用数组、字典和结构体
+		switch g.Request.Method {
 		case http.MethodPost, http.MethodPatch, http.MethodPut:
-			bindFn = c.ShouldBindJSON
+			bindFn = g.ShouldBindJSON
 		case http.MethodGet, http.MethodDelete, http.MethodOptions, http.MethodHead:
-			bindFn = c.ShouldBindQuery
+			bindFn = g.ShouldBindQuery
 		}
 		// 解析Body和Query 反序列化 + 参数检查
-		if err := bindFn(input); err != nil {
-			logger.Errorf("unmarshal and validate input: %s", err)
-			c.JSON(http.StatusOK, model.BaseResponse{
+		if err := bindFn(request); err != nil {
+			log.G(g).Errorf("unmarshal and validate request: %s", err)
+			g.JSON(http.StatusOK, model.BaseResponse{
 				Code:    model.CodeParamError,
 				Message: fmt.Sprintf("param error: %s", err),
 			})
 			return
 		}
 		// 执行控制器逻辑
-		ctrlInstance.Serve(c)
-		// 获取output结构体指针
-		output := ctrlInstance.Output()
+		ctrlInstance.Serve(g)
 		// JSON格式响应
-		c.JSON(http.StatusOK, output)
+		g.JSON(http.StatusOK, response)
 	}
 }

@@ -15,11 +15,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-func init() {
-	// 初始化伪随机数发生器
-	rand.Seed(time.Now().UnixNano())
-}
-
 // UUID  return an uuid string
 func UUID() string {
 	return uuid.New().String()
@@ -184,24 +179,12 @@ func SetStructPtrUnExportedStrField(source interface{}, fieldName string, fieldV
 	return nil
 }
 
-// value转指针函数，用于k8s一些value参数
-
-func GetInt32Ptr(i int32) *int32 {
-	return &i
+// 获取指针
+func Ptr[T any](in T) *T {
+	return &in
 }
 
-func GetUint32Ptr(i uint32) *uint32 {
-	return &i
-}
-
-func GetInt64Ptr(i int64) *int64 {
-	return &i
-}
-
-func GetUint64Ptr(i uint64) *uint64 {
-	return &i
-}
-
-func GetBoolPtr(i bool) *bool {
-	return &i
+// 获取指针的值
+func PtrValue[T any](in *T) T {
+	return *in
 }

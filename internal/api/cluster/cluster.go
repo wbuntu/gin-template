@@ -16,17 +16,7 @@ import (
 )
 
 type CreateClusterCtrl struct {
-	model.BaseController
-	request  model.CreateClusterReq
-	response model.CreateClusterResp
-}
-
-func (ctrl *CreateClusterCtrl) Input() model.Request {
-	return &ctrl.request
-}
-
-func (ctrl *CreateClusterCtrl) Output() model.Response {
-	return &ctrl.response
+	model.BaseController[model.CreateClusterReq, model.CreateClusterResp]
 }
 
 // @Summary     创建集群
@@ -35,20 +25,20 @@ func (ctrl *CreateClusterCtrl) Output() model.Response {
 // @Param       CreateClusterReq body     model.CreateClusterReq  true "请求"
 // @Response    200              {object} model.CreateClusterResp "响应"
 // @Router      /clusters [post]
-func (ctrl *CreateClusterCtrl) Serve(c *gin.Context) {
+func (ctrl *CreateClusterCtrl) Serve(g *gin.Context) {
+	logger := log.GetLogger(g)
 	// 生成集群资源ID
 	resourceID, err := storage.GenerateClusterResourceID()
 	if err != nil {
-		ctrl.Logger.Errorf("generate resourceID: %s", err)
-		ctrl.response.Update(model.CodeInternalError, "generate resourceID")
+		logger.Errorf("generate resourceID: %s", err)
+		ctrl.Response.Update(model.CodeInternalError, "generate resourceID")
 		return
 	}
-	req := &ctrl.request
+	req := &ctrl.Request
 	cluster := &storage.Cluster{
 		Name:        req.Name,
 		Description: req.Description,
 		ResourceID:  resourceID.ResourceID,
-		TenantID:    req.TenantID,
 		Type:        req.Type,
 		Version:     req.Version,
 		Runtime:     req.Runtime,
@@ -81,30 +71,20 @@ func (ctrl *CreateClusterCtrl) Serve(c *gin.Context) {
 		}
 		return nil
 	}); err != nil {
-		ctrl.Logger.Errorf("transaction: %s", err)
-		ctrl.response.Update(model.CodeInternalError, "commit request")
+		logger.Errorf("transaction: %s", err)
+		ctrl.Response.Update(model.CodeInternalError, "commit request")
 		return
 	}
-	ctrl.Logger.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"clusterID": task.ResourceID,
 		"taskID":    task.ID,
 	}).Info("create cluster task committed")
 	// 返回响应
-	ctrl.response.Data = resourceID.ResourceID
+	ctrl.Response.Data = resourceID.ResourceID
 }
 
 type DeleteClusterCtrl struct {
-	model.BaseController
-	request  model.BaseRequest
-	response model.BaseResponse
-}
-
-func (ctrl *DeleteClusterCtrl) Input() model.Request {
-	return &ctrl.request
-}
-
-func (ctrl *DeleteClusterCtrl) Output() model.Response {
-	return &ctrl.response
+	model.BaseController[model.BaseRequest, model.BaseResponse]
 }
 
 // @Summary     删除集群
@@ -113,30 +93,31 @@ func (ctrl *DeleteClusterCtrl) Output() model.Response {
 // @Param       clusterId path     string             true "集群资源ID" extensions(x-example=cluster-sedqqz7ka)
 // @Response    200       {object} model.BaseResponse "响应"
 // @Router      /clusters/{clusterId} [delete]
-func (ctrl *DeleteClusterCtrl) Serve(c *gin.Context) {
+func (ctrl *DeleteClusterCtrl) Serve(g *gin.Context) {
+	logger := log.GetLogger(g)
 	// 获取资源ID
-	clusterID := c.Param("clusterId")
+	clusterID := g.Param("clusterId")
 	// 获取集群
 	cluster, err := storage.GetClusterByResourceID(clusterID)
 	if err != nil {
-		ctrl.Logger.WithField("clusterID", clusterID).Errorf("get cluster: %s", err)
+		logger.WithField("clusterID", clusterID).Errorf("get cluster: %s", err)
 		if err == storage.ErrDoesNotExist {
-			ctrl.response.Update(model.CodeNotExists, "cluster not found")
+			ctrl.Response.Update(model.CodeNotExists, "cluster not found")
 		} else {
-			ctrl.response.Update(model.CodeInternalError, "get cluster")
+			ctrl.Response.Update(model.CodeInternalError, "get cluster")
 		}
 		return
 	}
 	// 检查状态，稳态才可以提交任务
 	if cluster.Status < storage.ClusterStatusRunning {
-		ctrl.Logger.WithField("clusterID", clusterID).Error("cluster status pending")
-		ctrl.response.Update(model.CodeForbidOperate, "cluster status pending")
+		logger.WithField("clusterID", clusterID).Error("cluster status pending")
+		ctrl.Response.Update(model.CodeForbidOperate, "cluster status pending")
 		return
 	}
 	// 超过30分钟未删除判定为异常
 	task := &storage.Task{
 		ResourceID: cluster.ResourceID,
-		RequestID:  ctrl.request.RequestID,
+		RequestID:  ctrl.Request.RequestID,
 		Status:     storage.TaskStatusEnqueued,
 		RetryType:  storage.TaskRetryTypeFixed,
 		RetryDelay: 10,
@@ -155,28 +136,18 @@ func (ctrl *DeleteClusterCtrl) Serve(c *gin.Context) {
 		}
 		return nil
 	}); err != nil {
-		ctrl.Logger.Errorf("transaction: %s", err)
-		ctrl.response.Update(model.CodeInternalError, "commit request")
+		logger.Errorf("transaction: %s", err)
+		ctrl.Response.Update(model.CodeInternalError, "commit request")
 		return
 	}
-	ctrl.Logger.WithFields(log.Fields{
+	logger.WithFields(log.Fields{
 		"clusterID": task.ResourceID,
 		"taskID":    task.ID,
 	}).Info("delete cluster task committed")
 }
 
 type GetClusterCtrl struct {
-	model.BaseController
-	request  model.GetClusterReq
-	response model.GetClusterResp
-}
-
-func (ctrl *GetClusterCtrl) Input() model.Request {
-	return &ctrl.request
-}
-
-func (ctrl *GetClusterCtrl) Output() model.Response {
-	return &ctrl.response
+	model.BaseController[model.GetClusterReq, model.GetClusterResp]
 }
 
 // @Summary     集群详情
@@ -185,21 +156,22 @@ func (ctrl *GetClusterCtrl) Output() model.Response {
 // @Param       clusterId path     string               true "集群资源ID" extensions(x-example=cluster-sedqqz7ka)
 // @Response    200       {object} model.GetClusterResp "响应"
 // @Router      /clusters/{clusterId} [get]
-func (ctrl *GetClusterCtrl) Serve(c *gin.Context) {
+func (ctrl *GetClusterCtrl) Serve(g *gin.Context) {
+	logger := log.GetLogger(g)
 	// 获取资源ID
-	resourceID := c.Param("clusterId")
+	resourceID := g.Param("clusterId")
 	// 获取集群
 	cluster, err := storage.GetClusterByResourceID(resourceID)
 	if err != nil {
-		ctrl.Logger.WithField("clusterID", resourceID).Errorf("get cluster: %s", err)
+		logger.WithField("clusterID", resourceID).Errorf("get cluster: %s", err)
 		if err == storage.ErrDoesNotExist {
-			ctrl.response.Update(model.CodeNotExists, "cluster not found")
+			ctrl.Response.Update(model.CodeNotExists, "cluster not found")
 		} else {
-			ctrl.response.Update(model.CodeInternalError, "get cluster")
+			ctrl.Response.Update(model.CodeInternalError, "get cluster")
 		}
 		return
 	}
-	ctrl.response.Data = &model.ClusterDetail{
+	ctrl.Response.Data = &model.ClusterDetail{
 		Name:        cluster.Name,
 		Description: cluster.Description,
 		ResourceID:  cluster.ResourceID,
@@ -212,17 +184,7 @@ func (ctrl *GetClusterCtrl) Serve(c *gin.Context) {
 }
 
 type ListClusterCtrl struct {
-	model.BaseController
-	request  model.ListClusterReq
-	response model.ListClusterResp
-}
-
-func (ctrl *ListClusterCtrl) Input() model.Request {
-	return &ctrl.request
-}
-
-func (ctrl *ListClusterCtrl) Output() model.Response {
-	return &ctrl.response
+	model.BaseController[model.ListClusterReq, model.ListClusterResp]
 }
 
 // @Summary     集群列表
@@ -234,30 +196,31 @@ func (ctrl *ListClusterCtrl) Output() model.Response {
 // @Param       filterValue query    string                false "查询值，默认为空"
 // @Response    200         {object} model.ListClusterResp "响应"
 // @Router      /clusters [get]
-func (ctrl *ListClusterCtrl) Serve(c *gin.Context) {
-	req := ctrl.request
+func (ctrl *ListClusterCtrl) Serve(g *gin.Context) {
+	logger := log.GetLogger(g)
+	req := ctrl.Request
 	filter, err := buildClusterFilter(req.FilterKey, req.FilterValue)
 	if err != nil {
-		ctrl.Logger.Errorf("build cluster filter: %s", err)
-		ctrl.response.Update(model.CodeParamError, "invalid filterKey or filterValue")
+		logger.Errorf("build cluster filter: %s", err)
+		ctrl.Response.Update(model.CodeParamError, "invalid filterKey or filterValue")
 		return
 	}
 
-	items, err := storage.ListCluster(req.TenantID, (req.PageNo-1)*req.PageSize, req.PageSize, filter)
+	items, err := storage.ListCluster((req.PageNo-1)*req.PageSize, req.PageSize, filter)
 	if err != nil {
-		ctrl.Logger.Errorf("list cluster: %s", err)
-		ctrl.response.Update(model.CodeInternalError, "list cluster")
+		logger.Errorf("list cluster: %s", err)
+		ctrl.Response.Update(model.CodeInternalError, "list cluster")
 		return
 	}
-	count, err := storage.CountCluster(req.TenantID, filter)
+	count, err := storage.CountCluster(filter)
 	if err != nil {
-		ctrl.Logger.Errorf("count cluster: %s", err)
-		ctrl.response.Update(model.CodeInternalError, "count cluster")
+		logger.Errorf("count cluster: %s", err)
+		ctrl.Response.Update(model.CodeInternalError, "count cluster")
 		return
 	}
-	ctrl.response.Data = make([]model.ClusterSummary, 0)
+	ctrl.Response.Data = make([]model.ClusterSummary, 0)
 	for _, cluster := range items {
-		ctrl.response.Data = append(ctrl.response.Data, model.ClusterSummary{
+		ctrl.Response.Data = append(ctrl.Response.Data, model.ClusterSummary{
 			Name:        cluster.Name,
 			Description: cluster.Description,
 			ResourceID:  cluster.ResourceID,
@@ -268,7 +231,7 @@ func (ctrl *ListClusterCtrl) Serve(c *gin.Context) {
 			CreateTime:  utils.FormatTime(cluster.CreatedAt),
 		})
 	}
-	ctrl.response.TotalCount = int(count)
+	ctrl.Response.TotalCount = int(count)
 }
 
 func buildClusterFilter(filterKey string, filterValue string) (*storage.Filter, error) {
@@ -350,12 +313,6 @@ func buildClusterFilter(filterKey string, filterValue string) (*storage.Filter, 
 				time.Unix(int64(start), 0),
 				time.Unix(int64(end), 0),
 			},
-		}
-	case "tenantID":
-		// 文本匹配
-		filter = &storage.Filter{
-			Query: "tenant_id = ?",
-			Args:  []interface{}{filterValue},
 		}
 	default:
 		return nil, errors.New("unsupported filterKey")

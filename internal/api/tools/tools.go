@@ -5,23 +5,14 @@ import (
 	"net"
 
 	"gitbub.com/wbuntu/gin-template/internal/model"
+	"gitbub.com/wbuntu/gin-template/internal/pkg/log"
 	"gitbub.com/wbuntu/gin-template/internal/pkg/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 )
 
 type CheckCIDRCtrl struct {
-	model.BaseController
-	request  model.CheckCIDRReq
-	response model.CheckCIDRResp
-}
-
-func (ctrl *CheckCIDRCtrl) Input() model.Request {
-	return &ctrl.request
-}
-
-func (ctrl *CheckCIDRCtrl) Output() model.Response {
-	return &ctrl.response
+	model.BaseController[model.CheckCIDRReq, model.CheckCIDRResp]
 }
 
 // @Summary     CIDR网段检查
@@ -30,10 +21,11 @@ func (ctrl *CheckCIDRCtrl) Output() model.Response {
 // @Param       CheckCIDRReq body     model.CheckCIDRReq  true "请求"
 // @Response    200          {object} model.CheckCIDRResp "响应"
 // @Router      /tools/check-cidr [post]
-func (ctrl *CheckCIDRCtrl) Serve(c *gin.Context) {
-	if err := checkCIDR(c, &ctrl.request); err != nil {
-		ctrl.Logger.Errorf("check cidr: %s", err)
-		ctrl.response.Update(model.CodeParamError, err.Error())
+func (ctrl *CheckCIDRCtrl) Serve(g *gin.Context) {
+	logger := log.GetLogger(g)
+	if err := checkCIDR(g, &ctrl.Request); err != nil {
+		logger.Errorf("check cidr: %s", err)
+		ctrl.Response.Update(model.CodeParamError, err.Error())
 		return
 	}
 }

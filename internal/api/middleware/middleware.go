@@ -6,16 +6,13 @@ import (
 
 	"gitbub.com/wbuntu/gin-template/internal/pkg/log"
 	"gitbub.com/wbuntu/gin-template/internal/pkg/utils"
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 )
 
 const (
 	// 请求ID
 	GinCtxRequestID = "X-Request-Id"
-	// 请求来源
-	GinCtxFrom = "X-Request-From"
-	// 租户ID
-	GinCtxTenantID = "X-Tenant-ID"
 )
 
 func HeaderExtracter() gin.HandlerFunc {
@@ -26,48 +23,35 @@ func HeaderExtracter() gin.HandlerFunc {
 			requestID = utils.UUID()
 		}
 		c.Set(GinCtxRequestID, requestID)
-		// 请求来源
-		from := c.GetHeader(GinCtxFrom)
-		if len(from) == 0 {
-			from = "unkonwn"
-		}
-		c.Set(GinCtxFrom, from)
-		// 用户 ID
-		tenantID := c.GetHeader(GinCtxTenantID)
-		if len(tenantID) == 0 {
-			tenantID = "unkonwn"
-		}
-		c.Set(GinCtxTenantID, tenantID)
 	}
 }
 
 func RequestLogger() gin.HandlerFunc {
-	return func(c *gin.Context) {
+	return func(g *gin.Context) {
 		// other handler can change c.Path so:
-		path := c.Request.URL.Path
+		path := g.Request.URL.Path
 		start := time.Now()
-		// set logger into request context
-		ctx := log.S(c.Request.Context(), log.WithFields(log.Fields{
+		// 初始化 logger 并保存到请求上下文中
+		ctx := log.S(g.Request.Context(), log.WithFields(log.Fields{
 			"module":    "api",
-			"tenantID":  c.GetString(GinCtxTenantID),
-			"requestID": c.GetString(GinCtxRequestID),
-			"from":      c.GetString(GinCtxFrom),
+			"requestID": g.GetString(GinCtxRequestID),
 		}))
-		c.Request = c.Request.WithContext(ctx)
+		g.Request = g.Request.WithContext(ctx)
 		// excute next
-		c.Next()
-		// log request
-		statusCode := c.Writer.Status()
-		logger := log.G(c).WithFields(log.Fields{
+		g.Next()
+		// 从请求上下文中获取 logger
+		logger := log.G(g).WithFields(log.Fields{
 			"latency":    time.Since(start), // time to process
-			"clientIP":   c.ClientIP(),
-			"method":     c.Request.Method,
-			"dataLength": c.Writer.Size(),
+			"clientIP":   g.ClientIP(),
+			"method":     g.Request.Method,
+			"dataLength": g.Writer.Size(),
 		})
-		if len(c.Errors) > 0 {
-			logger.Error(c.Errors.ByType(gin.ErrorTypePrivate).String())
+		// log request
+		if len(g.Errors) > 0 {
+			logger.Error(g.Errors.ByType(gin.ErrorTypePrivate).String())
 			return
 		}
+		statusCode := g.Writer.Status()
 		if statusCode >= http.StatusInternalServerError {
 			logger.Error(path)
 		} else if statusCode >= http.StatusBadRequest {
@@ -76,4 +60,8 @@ func RequestLogger() gin.HandlerFunc {
 			logger.Info(path)
 		}
 	}
+}
+
+func Gzip() gin.HandlerFunc {
+	return gzip.Gzip(gzip.DefaultCompression)
 }

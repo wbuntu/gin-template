@@ -3,72 +3,93 @@ package model
 import (
 	"strings"
 
-	"gitbub.com/wbuntu/gin-template/internal/pkg/log"
 	"github.com/gin-gonic/gin"
 )
 
 type Route struct {
 	Method     string
 	Path       string
-	Ctrl       Controller
-	Middleware []gin.HandlerFunc
+	Middleware []gin.HandlerFunc // 中间件
+	Factory    func() Controller // 工厂函数代替反射，生成控制器的效率更高
+}
+
+type Codec string
+
+const (
+	CodecJSON  Codec = "json"
+	CodecXML   Codec = "xml"
+	CodecProto Codec = "proto"
+	CodecWS    Codec = "ws"
+)
+
+func (c Codec) Streaming() bool {
+	switch c {
+	case CodecWS:
+		return true
+	default:
+		return false
+	}
 }
 
 type Controller interface {
-	// 公共接口
-	Init()                // 构造函数
-	SetLogger(log.Logger) // 设置logger
-	SkipIO() bool         // 关闭自动反序列化和写回响应
-	// 控制器接口
-	Input() Request     // 请求
-	Output() Response   // 响应
-	Serve(*gin.Context) // 控制器逻辑
+	Init()                 // 初始化
+	Codec() Codec          // 内容编码
+	Serve(*gin.Context)    // 控制器逻辑
+	GetRequest() Request   // 获取请求
+	GetResponse() Response // 获取响应
 }
 
-type BaseController struct {
-	Logger log.Logger
+type BaseController[I any, O any] struct {
+	Request     I
+	Response    O
+	requestPtr  Request
+	responsePtr Response
 }
 
-func (c *BaseController) Init() {}
-
-func (c *BaseController) SetLogger(logger log.Logger) {
-	c.Logger = logger
+func (c *BaseController[I, O]) Init() {
+	// 类型转换与初始化
+	c.requestPtr = any(&c.Request).(Request)
+	c.requestPtr.Init()
+	c.responsePtr = any(&c.Response).(Response)
+	c.responsePtr.Init()
 }
 
-func (c *BaseController) SkipIO() bool {
-	return false
+func (c *BaseController[I, O]) Codec() Codec {
+	return CodecJSON
+}
+
+func (c *BaseController[I, O]) Serve(g *gin.Context) {
+	panic("Serve Method must be implemented")
+}
+
+func (c *BaseController[I, O]) GetRequest() Request {
+	return c.requestPtr
+}
+func (c *BaseController[I, O]) GetResponse() Response {
+	return c.responsePtr
 }
 
 type Request interface {
-	SetTenantID(string)
-	GetTenantID() string
+	Init()
 	SetRequestID(string)
 	GetRequestID() string
-	SetFrom(string)
-	GetFrom() string
 }
 
 type Response interface {
 	Init()
-	GetCode() Code
-	GetMessage() string
 	GetRequestID() string
 	SetRequestID(string)
 }
 
 type BaseRequest struct {
-	TenantID  string `json:"-"` // 租户ID
 	RequestID string `json:"-"` // 请求ID
-	From      string `json:"-"` // 请求来源
 }
 
-func (r *BaseRequest) SetTenantID(item string) {
-	r.TenantID = item
+func (r *BaseRequest) GetHeaders() map[string]string {
+	return nil
 }
 
-func (r *BaseRequest) GetTenantID() string {
-	return r.TenantID
-}
+func (r *BaseRequest) Init() {}
 
 func (r *BaseRequest) SetRequestID(item string) {
 	r.RequestID = item
@@ -76,14 +97,6 @@ func (r *BaseRequest) SetRequestID(item string) {
 
 func (r *BaseRequest) GetRequestID() string {
 	return r.RequestID
-}
-
-func (r *BaseRequest) SetFrom(item string) {
-	r.From = item
-}
-
-func (r *BaseRequest) GetFrom() string {
-	return r.From
 }
 
 type BaseResponse struct {
@@ -97,8 +110,8 @@ func (r *BaseResponse) Init() {
 	r.Message = RespSuccess.Message
 }
 
-func (r *BaseResponse) GetCode() Code {
-	return r.Code
+func (r *BaseResponse) GetCode() string {
+	return string(r.Code)
 }
 
 func (r *BaseResponse) GetMessage() string {

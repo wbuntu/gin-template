@@ -34,3 +34,6 @@
 
 # report
 /report
+
+# gin-template data 
+.gin-template
