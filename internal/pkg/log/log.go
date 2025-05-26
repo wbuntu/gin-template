@@ -7,8 +7,8 @@ import (
 )
 
 // Setup configure log setting
-func Setup(c *config.Config) error {
-	logger, err := NewLogrusAdaptor(c.General.LogLevel, c.General.LogFormat)
+func Setup(cfg *config.Config) error {
+	logger, err := NewLogrusAdaptor(cfg.General.LogLevel, cfg.General.LogFormat)
 	if err != nil {
 		return err
 	}

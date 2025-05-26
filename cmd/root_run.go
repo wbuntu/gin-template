@@ -30,10 +30,10 @@ func run(cmd *cobra.Command, args []string) error {
 	logger := log.WithField("module", "main")
 	t := &task{
 		ctx:    ctx,
-		config: &config.C,
+		cfg:    &config.C,
 		logger: logger,
 	}
-	logger.WithField("config", t.config).Debug("print config")
+	logger.WithField("config", t.cfg).Debug("print config")
 	if err := t.setup(); err != nil {
 		logger.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func run(cmd *cobra.Command, args []string) error {
 // task
 type task struct {
 	ctx           context.Context
-	config        *config.Config
+	cfg           *config.Config
 	serveFuncs    []func()
 	shutdownFuncs []func()
 	logger        log.Logger
@@ -112,7 +112,7 @@ func (t *task) shutdown() {
 
 // printStartupLog 打印版本
 func printStartupLog(t *task) error {
-	t.logger.WithField("version", t.config.Version).Info("starting gin-template")
+	t.logger.WithField("version", t.cfg.Version).Info("starting gin-template")
 	return nil
 }
 
@@ -120,7 +120,7 @@ func printStartupLog(t *task) error {
 func setupStorage(t *task) error {
 	if err := storage.Setup(
 		t.ctx,
-		t.config,
+		t.cfg,
 	); err != nil {
 		return errors.Wrap(err, "setup storage")
 	}
@@ -132,7 +132,7 @@ func setupStorage(t *task) error {
 func migrateStorage(t *task) error {
 	if err := storage.Migrate(
 		t.ctx,
-		t.config,
+		t.cfg,
 	); err != nil {
 		return errors.Wrap(err, "migrate storage")
 	}
@@ -150,7 +150,7 @@ func setupDaemon(t *task) error {
 	srv := &daemon.Server{}
 	if err := srv.Setup(
 		t.ctx,
-		t.config,
+		t.cfg,
 	); err != nil {
 		return errors.Wrap(err, "setup daemon")
 	}
@@ -169,7 +169,7 @@ func setupAPI(t *task) error {
 	srv := &api.Server{}
 	if err := srv.Setup(
 		t.ctx,
-		t.config,
+		t.cfg,
 	); err != nil {
 		return errors.Wrap(err, "setup api")
 	}

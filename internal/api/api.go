@@ -21,10 +21,10 @@ type Server struct {
 	logger log.Logger
 }
 
-func (s *Server) Setup(ctx context.Context, c *config.Config) error {
+func (s *Server) Setup(ctx context.Context, cfg *config.Config) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.logger = log.WithField("module", "api")
-	if err := s.setupEngine(ctx, c); err != nil {
+	if err := s.setupEngine(cfg); err != nil {
 		return errors.Wrap(err, "setup engine")
 	}
 	return nil

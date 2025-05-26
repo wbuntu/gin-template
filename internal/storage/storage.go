@@ -28,18 +28,18 @@ func KVDB() *redis.Client {
 	return sharedKVDB
 }
 
-func Setup(ctx context.Context, c *config.Config) error {
+func Setup(ctx context.Context, cfg *config.Config) error {
 	var err error
 	// 初始化关系型数据库连接池
-	if c.General.EnableDB {
-		sharedDB, err = NewDB(ctx, c)
+	if cfg.General.EnableDB {
+		sharedDB, err = NewDB(ctx, cfg)
 		if err != nil {
 			return errors.Wrap(err, "NewDB")
 		}
 	}
 	// 初始化键值数据库连接池
-	if c.General.EnableKVDB {
-		sharedKVDB, err = NewKVDB(ctx, c)
+	if cfg.General.EnableKVDB {
+		sharedKVDB, err = NewKVDB(ctx, cfg)
 		if err != nil {
 			return errors.Wrap(err, "NewKVDB")
 		}
@@ -47,15 +47,15 @@ func Setup(ctx context.Context, c *config.Config) error {
 	return nil
 }
 
-func NewDB(ctx context.Context, c *config.Config) (*gorm.DB, error) {
+func NewDB(ctx context.Context, cfg *config.Config) (*gorm.DB, error) {
 	var dialector gorm.Dialector
-	switch c.DB.Type {
+	switch cfg.DB.Type {
 	case "sqlite":
-		dialector = sqlite.Open(c.DB.DSN)
+		dialector = sqlite.Open(cfg.DB.DSN)
 	case "mysql":
-		dialector = mysql.Open(c.DB.DSN)
+		dialector = mysql.Open(cfg.DB.DSN)
 	default:
-		return nil, errors.Errorf("unsupported db type: %s", c.DB.Type)
+		return nil, errors.Errorf("unsupported db type: %s", cfg.DB.Type)
 	}
 	db, err := gorm.Open(dialector, &gorm.Config{
 		Logger: logger.New(log.New(os.Stdout, "\r\n", log.LstdFlags), logger.Config{
@@ -72,25 +72,25 @@ func NewDB(ctx context.Context, c *config.Config) (*gorm.DB, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "get db")
 	}
-	sqlDB.SetMaxIdleConns(c.DB.MinIdleConns)
-	sqlDB.SetMaxOpenConns(c.DB.MaxActiveConns)
-	sqlDB.SetConnMaxLifetime(c.DB.ConnLifetime)
-	sqlDB.SetConnMaxIdleTime(c.DB.ConnIdletime)
+	sqlDB.SetMaxIdleConns(cfg.DB.MinIdleConns)
+	sqlDB.SetMaxOpenConns(cfg.DB.MaxActiveConns)
+	sqlDB.SetConnMaxLifetime(cfg.DB.ConnLifetime)
+	sqlDB.SetConnMaxIdleTime(cfg.DB.ConnIdletime)
 	if err := sqlDB.PingContext(ctx); err != nil {
 		return nil, errors.Wrap(err, "ping db")
 	}
 	return db, nil
 }
 
-func NewKVDB(ctx context.Context, c *config.Config) (*redis.Client, error) {
-	redisOpt, err := redis.ParseURL(c.KVDB.DSN)
+func NewKVDB(ctx context.Context, cfg *config.Config) (*redis.Client, error) {
+	redisOpt, err := redis.ParseURL(cfg.KVDB.DSN)
 	if err != nil {
 		return nil, errors.Wrap(err, "parse kv_db dsn")
 	}
-	redisOpt.MinIdleConns = c.KVDB.MinIdleConns
-	redisOpt.PoolSize = c.KVDB.MaxActiveConns
-	redisOpt.MaxConnAge = c.KVDB.ConnLifetime
-	redisOpt.IdleTimeout = c.KVDB.ConnIdletime
+	redisOpt.MinIdleConns = cfg.KVDB.MinIdleConns
+	redisOpt.PoolSize = cfg.KVDB.MaxActiveConns
+	redisOpt.MaxConnAge = cfg.KVDB.ConnLifetime
+	redisOpt.IdleTimeout = cfg.KVDB.ConnIdletime
 	db := redis.NewClient(redisOpt)
 	if _, err := db.Ping(ctx).Result(); err != nil {
 		return nil, errors.Wrap(err, "ping kv_db")

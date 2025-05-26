@@ -19,10 +19,10 @@ type Server struct {
 	enableLeaderElection bool
 }
 
-func (s *Server) Setup(ctx context.Context, c *config.Config) error {
+func (s *Server) Setup(ctx context.Context, cfg *config.Config) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.logger = log.WithField("module", "daemon")
-	s.enableLeaderElection = c.General.EnableLeaderElection
+	s.enableLeaderElection = cfg.General.EnableLeaderElection
 	if s.enableLeaderElection {
 		// 使用kube-apiserver做选举
 		cfg, err := rest.InClusterConfig()

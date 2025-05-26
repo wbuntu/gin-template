@@ -1,9 +1,13 @@
 package model
 
 import (
+	"net/http"
 	"strings"
 
+	"gitbub.com/wbuntu/gin-template/internal/pkg/log"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/pkg/errors"
 )
 
 type Route struct {
@@ -17,8 +21,8 @@ type Codec string
 
 const (
 	CodecJSON  Codec = "json"
-	CodecXML   Codec = "xml"
 	CodecProto Codec = "proto"
+	CodecYaml  Codec = "yaml"
 	CodecWS    Codec = "ws"
 )
 
@@ -28,6 +32,53 @@ func (c Codec) Streaming() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func (c Codec) BindRequest(g *gin.Context, req Request) error {
+	switch c {
+	case CodecJSON:
+		return c.bindJSON(g, req)
+	case CodecProto:
+		return g.ShouldBindWith(req, binding.ProtoBuf)
+	case CodecYaml:
+		return g.ShouldBindYAML(req)
+	default:
+		return errors.Errorf("unsupported codec: %s", c)
+	}
+}
+
+func (c Codec) bindJSON(g *gin.Context, req Request) error {
+	// 使用 json 同时处理 body 和 query 参数
+	// 先根据请求方法选择binding
+	// POST、PATCH、PUT：从 Body 中解析 request
+	// 其他：从 Query 中解析 request ，参数值禁止嵌套，不允许使用数组、字典和结构体
+	switch g.Request.Method {
+	case http.MethodPost, http.MethodPatch, http.MethodPut:
+		return g.ShouldBindJSON(req)
+	case http.MethodGet, http.MethodDelete, http.MethodOptions, http.MethodHead:
+		// 移植 binding.Query 的逻辑，支持 json 的 tag 解析
+		values := g.Request.URL.Query()
+		if err := binding.MapFormWithTag(req, values, "json"); err != nil {
+			return err
+		}
+		if binding.Validator != nil {
+			return binding.Validator.ValidateStruct(req)
+		}
+	}
+	return nil
+}
+
+func (c Codec) RenderResponse(g *gin.Context, resp Response) {
+	switch c {
+	case CodecJSON:
+		g.JSON(http.StatusOK, resp)
+	case CodecProto:
+		g.ProtoBuf(http.StatusOK, resp)
+	case CodecYaml:
+		g.YAML(http.StatusOK, resp)
+	default:
+		log.G(g).Errorf("unsupported codec: %s", c)
 	}
 }
 

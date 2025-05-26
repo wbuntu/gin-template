@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -16,7 +15,7 @@ import (
 	"gitbub.com/wbuntu/gin-template/internal/pkg/log"
 )
 
-func (s *Server) setupEngine(ctx context.Context, c *config.Config) error {
+func (s *Server) setupEngine(cfg *config.Config) error {
 	// 设置模式
 	gin.SetMode(gin.DebugMode)
 	// 初始化
@@ -28,25 +27,25 @@ func (s *Server) setupEngine(ctx context.Context, c *config.Config) error {
 		gin.Recovery(),
 	)
 	// healthz && pprof && swagger && metrics
-	addCommonRoutes(g)
+	s.addCommonRoutes(g)
 	// controller
-	addControllerRoute(g)
+	s.addControllerRoute(g)
 	// srv
 	s.srv = &http.Server{
-		Addr:    c.API.Addr,
+		Addr:    cfg.API.Addr,
 		Handler: g,
 	}
 	// tlsSrv
-	if len(c.API.TLSAddr) > 0 && len(c.API.TLSCrt) > 0 && len(c.API.TLSCrt) > 0 {
+	if len(cfg.API.TLSAddr) > 0 && len(cfg.API.TLSCrt) > 0 && len(cfg.API.TLSCrt) > 0 {
 		s.tlsSrv = &http.Server{
-			Addr:    c.API.TLSAddr,
+			Addr:    cfg.API.TLSAddr,
 			Handler: g,
 		}
 	}
 	return nil
 }
 
-func addCommonRoutes(g *gin.Engine) {
+func (s *Server) addCommonRoutes(g *gin.Engine) {
 	// readyz
 	g.GET("/readyz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, model.RespSuccess)
@@ -63,7 +62,7 @@ func addCommonRoutes(g *gin.Engine) {
 	}))
 }
 
-func addControllerRoute(g *gin.Engine) {
+func (s *Server) addControllerRoute(g *gin.Engine) {
 	v1 := g.Group("/api/v1.0")
 	// 配置中间件
 	v1.Use(
@@ -113,18 +112,8 @@ func handlerFuncWrapper(factory func() model.Controller) gin.HandlerFunc {
 			ctrlInstance.Serve(g)
 			return
 		}
-		// 根据请求方法选择binding
-		var bindFn func(any) error
-		// POST、PATCH、PUT：从 Body 中解析 request
-		// 其他：从 Query 中解析 request ，参数值禁止嵌套，不允许使用数组、字典和结构体
-		switch g.Request.Method {
-		case http.MethodPost, http.MethodPatch, http.MethodPut:
-			bindFn = g.ShouldBindJSON
-		case http.MethodGet, http.MethodDelete, http.MethodOptions, http.MethodHead:
-			bindFn = g.ShouldBindQuery
-		}
-		// 解析Body和Query 反序列化 + 参数检查
-		if err := bindFn(request); err != nil {
+		// 反序列化请求
+		if err := ctrlInstance.Codec().BindRequest(g, request); err != nil {
 			log.G(g).Errorf("unmarshal and validate request: %s", err)
 			g.JSON(http.StatusOK, model.BaseResponse{
 				Code:    model.CodeParamError,
@@ -134,7 +123,7 @@ func handlerFuncWrapper(factory func() model.Controller) gin.HandlerFunc {
 		}
 		// 执行控制器逻辑
 		ctrlInstance.Serve(g)
-		// JSON格式响应
-		g.JSON(http.StatusOK, response)
+		// 序列化响应
+		ctrlInstance.Codec().RenderResponse(g, response)
 	}
 }
